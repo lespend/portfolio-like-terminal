@@ -8,3 +8,16 @@ export function readFile(path) {
     xhr.send();
     return response;
 }
+
+export function scrollHeightListener(element, callback) {
+    function listener(height, timeout) {
+        if (height != element.offsetHeight) {
+            callback();            
+        }
+        
+        let prevHeight = element.offsetHeight;
+        setTimeout( () => { listener(prevHeight, timeout) }, timeout)
+    }
+
+    listener(element.offsetHeight, 10)
+}
