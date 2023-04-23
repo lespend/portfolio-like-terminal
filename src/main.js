@@ -1,10 +1,11 @@
 import './style.scss';
-import { readFile, scrollHeightListener } from './lib.js';
+import { getMobileUiElements, readFile, responsiveTitle, scrollHeightListener } from './lib.js';
 
 class Terminal {
     constructor(buffer, commands = {}) {
         // Настройки терминала
         this.config = {
+            'outputCharDelay': 8,
             'commandLinePrefix': '>',
             'keyboardRegexp': /[a-zA-Zа-яА-ЯёЁ0-9]/g,
         }
@@ -19,10 +20,10 @@ class Terminal {
                 'description': 'Очищает терминал',
                 'method': this.clear
             },
-            'test': {
-                'description': 'Test', 
-                'method': this.test
-            },
+            // 'test': {
+            //     'description': 'Test', 
+            //     'method': this.test
+            // },
             'welcome': {
                 'description': 'Выводит приветствие',
                 'method': this.welcome
@@ -38,15 +39,7 @@ class Terminal {
         // Активация клавиатуры
         document.addEventListener('keydown', (event) => {
             if (event.key == 'Enter') {
-                let command = this.commandLine.textContent;
-                if (command != '') {
-                    if (this.commands[command]) {
-                        this.commands[command]['method'].call(this);
-                    }  else {
-                        this.output('Кажется такой команды не существует.\nВоспользуйтесь help')
-                    }
-                    this.#addCommandLine();
-                }
+                this.inputHandler();
             } else if (event.key == 'Backspace') {
                 this.commandLine.textContent = this.commandLine.textContent.slice(0, -1);
             } else if (event.key == ' ') {
@@ -74,25 +67,27 @@ class Terminal {
     }
 
     welcome() {
-        this.output(readFile('content/welcome.txt'));
+        this.outputHTML(readFile('content/welcome.html'));
     }
 
     outputHTML(text) {
-        let elements = new DOMParser().parseFromString(text, 'text/html').body.children;
+        let elements = new DOMParser().parseFromString(text, 'text/html').body;
         // Рекурсивный обход по HTML элементам и изменение их текстового содержимого 
-        let run = (elements) => {
-            for (let element of elements) {
-                if (element.children.length == 0) {
-                    element.innerHTML = this.#getLine(element.innerHTML);
-                } else {
-                    run(element.children)
+        let run = (element) => {
+            if (element.children.length != 0 ) {
+                for (let child of element.children) {
+                    run(child);
+                }
+            } else {
+                if (element?.textContent) {
+                    element.innerHTML = this.#getLine(element.textContent);
                 }
             }
         }
 
-        for (let element of elements) {
-            this.buffer.append(element);
-        }
+        run(elements);
+
+        this.buffer.append(...elements.children)
         
         let notShown = this.buffer.querySelectorAll('.retro-terminal-char:not(.shown)');
         let counter = 0;
@@ -100,7 +95,7 @@ class Terminal {
             counter += 1;
             setTimeout(() => {
                 el.classList.add('shown');
-            }, 10 * counter)
+            }, this.config.outputCharDelay * counter)
         }
     }
 
@@ -121,7 +116,7 @@ class Terminal {
         this.buffer.querySelectorAll('.retro-terminal-char:not(.shown)').forEach((el) => {
             setTimeout(() => {
                 el.classList.add('shown');
-            }, 5 * counter);
+            }, this.config.outputCharDelay*counter);
             counter++;
         });
     }
@@ -130,7 +125,7 @@ class Terminal {
         let out = '';
         for (let char of line) {
             if (char == ' ') {
-                char = '&nbsp;'
+                char = '&#32;'
             }
             out += `<div class="retro-terminal-char">${char}</div>`
         }
@@ -154,6 +149,18 @@ class Terminal {
         this.commandLine.classList.add('caret');
     }
 
+    inputHandler() {
+        let command = this.commandLine.textContent.trim();
+        if (command != '') {
+            if (this.commands[command]) {
+                this.commands[command]['method'].call(this);
+            }  else {
+                this.output('Кажется такой команды не существует.\nВоспользуйтесь help')
+            }
+            this.#addCommandLine();
+        }
+    }
+
     addCommands(commands) {
         for (let [key, value] of Object.entries(commands)) {
             this.commands[key] = commands[key];
@@ -165,10 +172,12 @@ const t = new Terminal(document.querySelector('.buffer'));
 t.addCommands({
     'about': {
         'description': 'Обо мне',
-        'method': () => { t.output(readFile('content/about-me.txt')) },
+        'method': () => { t.outputHTML(readFile('content/about-me.html')) },
     },
     'projects': {
         'description': 'Проекты',
         'method': () => { t.outputHTML(readFile('content/projects.html')) }
     }
 });
+
+getMobileUiElements(t);
